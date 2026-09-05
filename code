@@ -1,0 +1,33 @@
+🔧 E-07 Sheet Metal Calculator
+K-Factor / Y-Factor • material & V-die • multi-bend • flat length
+Material & setup
+Thickness (mm)
+Material
+V Die (mm)
+Factor type
+K-FactorY-Factor
+Factor value
+Preset
+Last leg / total legs (mm)
+
+Auto inside radius from selected V-die
+
+Bends
+
++ Add bend
+Remove last
+Result
+0.00 mm flat length
+0.00
+Total bend deduction
+0.00
+Total bend allowance
+0.400
+Effective K-factor
+0.628
+Effective Y-factor
+
+Actions
+Calculate
+Reset
+
