@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#f5f5f7">
+<title>E-07 Sheet Metal Calculator</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#111}
+*{box-sizing:border-box}body{margin:0;background:#f2f2f7}
+header{position:sticky;top:0;z-index:2;background:#f2f2f7dd;backdrop-filter:blur(12px);padding:14px 14px 8px}
+h1{font-size:22px;margin:0 0 4px}.sub{font-size:12px;color:#666}
+main{max-width:700px;margin:auto;padding:8px 12px 30px}
+.card{background:white;border-radius:16px;padding:14px;margin:10px 0;box-shadow:0 1px 3px #0001}
+h2{font-size:16px;margin:0 0 12px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{font-size:12px;color:#555;display:block;margin-bottom:4px}
+input,select,button{width:100%;font:inherit;border-radius:10px;border:1px solid #ccc;padding:10px;background:white}
+input[type=number]{-moz-appearance:textfield}
+button{font-weight:600;border:0;background:#111;color:white}
+button.secondary{background:#e5e5ea;color:#111}
+button.danger{background:#eee;color:#b00020}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row{border-top:1px solid #eee;padding:12px 0}.row:first-child{border-top:0}
+.bendgrid{display:grid;grid-template-columns:1.05fr 1fr 1fr 1fr;gap:7px;align-items:end}
+.bendgrid input{padding:8px;font-size:15px}.bendhead{font-size:10px;color:#777}
+.result{font-size:30px;font-weight:700}.unit{font-size:15px;color:#666;font-weight:500}
+.small{font-size:12px;color:#666}.hint{margin-top:7px;font-size:12px;color:#555}
+.check{display:flex;gap:8px;align-items:center;margin-top:10px}.check input{width:auto}
+.output{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.stat{background:#f2f2f7;border-radius:10px;padding:10px}.stat b{display:block;font-size:18px}.stat span{font-size:11px;color:#666}
+@media(max-width:430px){.grid{grid-template-columns:1fr}.bendgrid{grid-template-columns:1fr 1fr 1fr 1fr}.bendgrid input{font-size:14px;padding:8px}}
+</style>
+</head>
+<body>
+<header><h1>🔧 E-07 Sheet Metal Calculator</h1><div class="sub">K-Factor / Y-Factor • material & V-die • multi-bend • flat length</div></header>
+<main>
+<section class="card">
+<h2>Material & setup</h2>
+<div class="grid">
+<div><label>Thickness (mm)</label><input id="thk" type="number" step="0.01" value="2"></div>
+<div><label>Material</label><select id="material"></select></div>
+<div><label>V Die (mm)</label><select id="vdie"></select></div>
+<div><label>Factor type</label><select id="ftype"><option>K-Factor</option><option>Y-Factor</option></select></div>
+<div><label>Factor value</label><input id="factor" type="number" step="0.001" value="0.400"></div>
+</div>
+<div class="grid" style="margin-top:10px">
+<div><label>Preset</label><select id="preset"></select></div>
+<div><label>Last leg / total legs (mm)</label><input id="legs" type="number" step="0.01" value="300"></div>
+</div>
+<div class="check"><input id="autoR" type="checkbox" checked><label for="autoR" style="margin:0">Auto inside radius from selected V-die</label></div>
+<div id="hint" class="hint"></div>
+</section>
+
+<section class="card">
+<h2>Bends</h2>
+<div id="bends"></div>
+<div class="actions" style="margin-top:10px">
+<button id="add">+ Add bend</button><button class="secondary" id="remove">Remove last</button>
+</div>
+</section>
+
+<section class="card">
+<h2>Result</h2>
+<div class="result"><span id="flat">0.00</span> <span class="unit">mm flat length</span></div>
+<div class="output">
+<div class="stat"><b id="bd">0.00</b><span>Total bend deduction</span></div>
+<div class="stat"><b id="ba">0.00</b><span>Total bend allowance</span></div>
+<div class="stat"><b id="kf">0.400</b><span>Effective K-factor</span></div>
+<div class="stat"><b id="yf">0.628</b><span>Effective Y-factor</span></div>
+</div>
+<div class="small" id="note" style="margin-top:10px"></div>
+</section>
+
+<section class="card">
+<h2>Actions</h2>
+<div class="actions">
+<button id="calc">Calculate</button><button class="secondary" id="reset">Reset</button>
+</div>
+</section>
+</main>
+<script>
+const materials=[
+["Mild Steel / CRS",0.40],
+["Aluminium 5052",0.38],
+["Aluminium (soft)",0.33],
+["Stainless Steel 304",0.45],
+["Stainless Steel 430",0.45],
+["Stainless Steel 316",0.45],
+["Hard / Spring Steel",0.50],
+["Custom",null]
+];
+const dies=[6,8,10,12,16,20,25,32,40,50,63,80,100];
+const measured={8:1.3,10:1.6,12:2.0,16:2.6,20:3.2,25:4.0,32:5.2,40:6.5,50:8.0};
+const presets=[
+["Custom",null],
+["Soft Aluminium K≈0.33",.33],
+["Aluminium 5052 K≈0.38",.38],
+["Mild Steel / CRS K≈0.40",.40],
+["Stainless 304 K≈0.45",.45],
+["Hard / Spring K≈0.50",.50],
+["Creo default Y=0.50 K≈0.318",.31831],
+["Amada 304 typical K≈0.33",.33]
+];
+const $=id=>document.getElementById(id);
+materials.forEach((m,i)=>$("material").add(new Option(m[0],i)));
+dies.forEach(v=>$("vdie").add(new Option("V"+v,v)));
+presets.forEach((p,i)=>$("preset").add(new Option(p[0],i)));
+$("preset").value=3;\n$("material").value=0;
+
+function effectiveK(){
+  let x=parseFloat($("factor").value)||0;
+  return $("ftype").value==="K-Factor" ? x : x*2/Math.PI;
+}
+function radius(){
+  const v=$("vdie").value;
+  return measured[v] || 0;
+}
+function addBend(angle=90,length=0){
+  const d=document.createElement("div"); d.className="row bend";
+  d.innerHTML=`<div class="bendgrid">
+    <div><div class="bendhead">ANGLE °</div><input class="ang" type="number" step="0.1" value="${angle}"></div>
+    <div><div class="bendhead">LEG LENGTH</div><input class="len" type="number" step="0.01" value="${length}"></div>
+    <div><div class="bendhead">RADIUS</div><input class="rad" type="number" step="0.01" value="${radius().toFixed(2)}"></div>
+    <div><div class="bendhead">&nbsp;</div><button class="danger del">×</button></div>
+  </div>`;
+  $("bends").appendChild(d);
+  d.querySelector(".del").onclick=()=>{d.remove();calculate()};
+  d.querySelectorAll("input").forEach(x=>x.oninput=calculate);
+}
+function setAutoRadius(){
+  const r=radius(),v=$("vdie").value;
+  $("hint").textContent=$("autoR").checked
+    ? `Using measured/typical inside R = ${r.toFixed(2)} mm for V${v}.`
+    : "Manual radius mode – type the value you actually get.";
+  document.querySelectorAll(".rad").forEach(x=>{if($("autoR").checked)x.value=r.toFixed(2)});
+}
+function calculate(){
+  const T=parseFloat($("thk").value)||0,K=effectiveK();
+  let totalBD=0,totalBA=0,totalLegs=0;
+  document.querySelectorAll(".bend").forEach(row=>{
+    const a=Math.abs(parseFloat(row.querySelector(".ang").value)||0);
+    const L=parseFloat(row.querySelector(".len").value)||0;
+    let R=parseFloat(row.querySelector(".rad").value)||0;
+    if($("autoR").checked) R=radius();
+    const ar=a*Math.PI/180, Rn=R+K*T;
+    const BA=ar*Rn;
+    const OSSB=(R+T)*Math.tan(ar/2);
+    const BD=2*OSSB-BA;
+    totalBA+=BA; totalBD+=BD; totalLegs+=L;
+  });
+  const last=parseFloat($("legs").value)||0;
+  const flat=Math.max(0,(last||totalLegs)-totalBD);
+  $("flat").textContent=flat.toFixed(2);
+  $("bd").textContent=totalBD.toFixed(2);
+  $("ba").textContent=totalBA.toFixed(2);
+  $("kf").textContent=K.toFixed(4);
+  $("yf").textContent=(K*Math.PI/2).toFixed(4);
+  $("note").textContent=`Formula: Rn = R + K×T • BA = angle(rad)×Rn • BD = 2×OSSB − BA.`;
+}
+$("add").onclick=()=>{addBend(90,0);calculate()};
+$("remove").onclick=()=>{const x=$("bends").lastElementChild;if(x)x.remove();calculate()};
+$("calc").onclick=calculate;
+$("reset").onclick=()=>{location.reload()};
+$("vdie").onchange=()=>{setAutoRadius();calculate()};
+$("autoR").onchange=()=>{setAutoRadius();calculate()};
+$("ftype").onchange=()=>{calculate()};
+$("factor").oninput=()=>{ $("preset").value=0; calculate()};
+$("preset").onchange=()=>{
+ const p=presets[$("preset").value]; if(p[1]!=null){$("ftype").value="K-Factor";$("factor").value=p[1]}
+ calculate();
+};
+$("material").onchange=()=>{
+  const m=materials[$("material").value];
+  if(m[1]!==null){
+    $("ftype").value="K-Factor";
+    $("factor").value=m[1];
+    $("preset").value=0;
+  }
+  calculate();
+};
+$("thk").oninput=calculate;$("legs").oninput=calculate;
+$("vdie").value=16;
+addBend(90,100);addBend(90,100);
+setAutoRadius();calculate();
+</script>
+</body>
+</html>
